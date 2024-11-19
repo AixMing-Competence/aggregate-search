@@ -1,7 +1,7 @@
 # 数据初始化
 
 -- 切换库
-use my_db;
+use aggregate_search;
 
 -- 用户表初始数据
 INSERT INTO user (id, userAccount, userPassword, unionId, mpOpenId, userName, userAvatar, userProfile, userRole,

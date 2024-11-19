@@ -19,8 +19,9 @@ import com.aixming.aggregatesearch.model.vo.PostVO;
 import com.aixming.aggregatesearch.service.PostService;
 import com.aixming.aggregatesearch.service.UserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.NotNull;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
@@ -34,14 +35,13 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/post")
+@RequiredArgsConstructor
 @Slf4j
 public class PostController {
 
-    @Resource
-    private PostService postService;
+    private final @NotNull PostService postService;
 
-    @Resource
-    private UserService userService;
+    private final @NotNull UserService userService;
 
     // region 增删改查
 
@@ -170,14 +170,10 @@ public class PostController {
      */
     @PostMapping("/list/page/vo")
     public BaseResponse<Page<PostVO>> listPostVOByPage(@RequestBody PostQueryRequest postQueryRequest,
-            HttpServletRequest request) {
-        long current = postQueryRequest.getCurrent();
-        long size = postQueryRequest.getPageSize();
-        // 限制爬虫
-        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
-        Page<Post> postPage = postService.page(new Page<>(current, size),
-                postService.getQueryWrapper(postQueryRequest));
-        return ResultUtils.success(postService.getPostVOPage(postPage, request));
+                                                       HttpServletRequest request) {
+        ThrowUtils.throwIf(postQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        Page<PostVO> postVOPage = postService.listPostVOByPage(postQueryRequest, request);
+        return ResultUtils.success(postVOPage);
     }
 
     /**
@@ -189,7 +185,7 @@ public class PostController {
      */
     @PostMapping("/my/list/page/vo")
     public BaseResponse<Page<PostVO>> listMyPostVOByPage(@RequestBody PostQueryRequest postQueryRequest,
-            HttpServletRequest request) {
+                                                         HttpServletRequest request) {
         if (postQueryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }

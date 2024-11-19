@@ -1,7 +1,8 @@
 package com.aixming.aggregatesearch.utils;
 
-import java.net.InetAddress;
 import jakarta.servlet.http.HttpServletRequest;
+
+import java.net.InetAddress;
 
 /**
  * 网络工具类

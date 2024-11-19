@@ -11,10 +11,10 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
  */
 // todo 如需开启 Redis，须移除 exclude 中的内容
 @SpringBootApplication(exclude = {RedisAutoConfiguration.class})
-public class MainApplication {
+public class AggregateSearchApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(MainApplication.class, args);
+        SpringApplication.run(AggregateSearchApplication.class, args);
     }
 
 }

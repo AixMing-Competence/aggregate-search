@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import com.aixming.aggregatesearch.common.ErrorCode;
 import com.aixming.aggregatesearch.constant.CommonConstant;
 import com.aixming.aggregatesearch.exception.BusinessException;
+import com.aixming.aggregatesearch.exception.ThrowUtils;
 import com.aixming.aggregatesearch.mapper.UserMapper;
 import com.aixming.aggregatesearch.model.dto.user.UserQueryRequest;
 import com.aixming.aggregatesearch.model.entity.User;
@@ -13,6 +14,7 @@ import com.aixming.aggregatesearch.model.vo.UserVO;
 import com.aixming.aggregatesearch.service.UserService;
 import com.aixming.aggregatesearch.utils.SqlUtils;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -235,5 +237,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         queryWrapper.orderBy(SqlUtils.validSortField(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC),
                 sortField);
         return queryWrapper;
+    }
+
+    @Override
+    public Page<UserVO> listUserVOByPage(UserQueryRequest userQueryRequest) {
+        int current = userQueryRequest.getCurrent();
+        int pageSize = userQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(pageSize > 20, ErrorCode.PARAMS_ERROR);
+        Page<User> userPage = page(new Page<>(current, pageSize),
+                getQueryWrapper(userQueryRequest));
+        Page<UserVO> userVOPage = new Page<>(current, pageSize, userPage.getTotal());
+        List<UserVO> userVO = getUserVO(userPage.getRecords());
+        userVOPage.setRecords(userVO);
+        return userVOPage;
     }
 }

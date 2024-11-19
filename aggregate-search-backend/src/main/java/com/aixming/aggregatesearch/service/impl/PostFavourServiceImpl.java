@@ -109,7 +109,3 @@ public class PostFavourServiceImpl extends ServiceImpl<PostFavourMapper, PostFav
     }
 
 }
-
-
-
-

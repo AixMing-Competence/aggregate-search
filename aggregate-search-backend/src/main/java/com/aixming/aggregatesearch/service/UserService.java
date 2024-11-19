@@ -5,6 +5,7 @@ import com.aixming.aggregatesearch.model.entity.User;
 import com.aixming.aggregatesearch.model.vo.LoginUserVO;
 import com.aixming.aggregatesearch.model.vo.UserVO;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -108,4 +109,5 @@ public interface UserService extends IService<User> {
      */
     QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest);
 
+    Page<UserVO> listUserVOByPage(UserQueryRequest userQueryRequest);
 }
