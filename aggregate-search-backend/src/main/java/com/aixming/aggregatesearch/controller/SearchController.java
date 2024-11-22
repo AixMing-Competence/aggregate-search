@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -79,18 +80,18 @@ public class SearchController {
             // 并发查询全部数据
             CompletableFuture<Void> pictureTask = CompletableFuture.runAsync(() -> {
                 if (StringUtils.isNotBlank(searchText)) {
-                    Page<Picture> picturePage = pictureDataSource.doSearch(searchText, current, pageSize,request);
+                    Page<Picture> picturePage = pictureDataSource.doSearch(searchText, current, pageSize, request);
                     searchVO.setPictureList(picturePage.getRecords());
                 }
             });
 
             CompletableFuture<Page<UserVO>> userTask = CompletableFuture.supplyAsync(() -> {
-                Page<UserVO> userVOPage = userDataSource.doSearch(searchText, current, pageSize,request);
+                Page<UserVO> userVOPage = userDataSource.doSearch(searchText, current, pageSize, request);
                 return userVOPage;
             });
 
             CompletableFuture<Page<PostVO>> postTask = CompletableFuture.supplyAsync(() -> {
-                Page<PostVO> postVOPage = postDataSource.doSearch(searchText, current, pageSize,request);
+                Page<PostVO> postVOPage = postDataSource.doSearch(searchText, current, pageSize, request);
                 return postVOPage;
             });
 
@@ -109,21 +110,13 @@ public class SearchController {
             searchVO.setPostList(postVOPage.getRecords());
         } else {
             // 查询特殊类别的数据
-            DataSource dataSource = null;
-            switch (searchTypeEnum) {
-                case POST -> {
-                    dataSource = postDataSource;
-                }
-                case USER -> {
-                    dataSource = userDataSource;
-                }
-                case PICTURE -> {
-                    dataSource = pictureDataSource;
-                }
-                default -> {
-                }
-            }
-            Page<?> page = dataSource.doSearch(searchText, current, pageSize,request);
+            Map<String, DataSource<?>> searchTypeEnumMap = Map.of(
+                    SearchTypeEnum.USER.getValue(), userDataSource,
+                    SearchTypeEnum.POST.getValue(), postDataSource,
+                    SearchTypeEnum.PICTURE.getValue(), pictureDataSource
+            );
+            DataSource<?> dataSource = searchTypeEnumMap.get(searchTypeEnum.getValue());
+            Page<?> page = dataSource.doSearch(searchText, current, pageSize, request);
             searchVO.setDataList(page.getRecords());
         }
         return ResultUtils.success(searchVO);

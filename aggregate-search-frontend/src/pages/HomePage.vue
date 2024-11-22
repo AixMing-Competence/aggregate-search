@@ -94,6 +94,9 @@ watchEffect(() => {
  * 点击搜索按钮时触发
  */
 const onSearch = () => {
+  if (!searchText.value) {
+    return;
+  }
   // 修改url后面的参数
   router.push({
     query: {
