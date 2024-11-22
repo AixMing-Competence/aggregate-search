@@ -1,7 +1,7 @@
 <template>
   <div class="homePage">
     <a-input-search
-      v-model:value="searchParams.searchText"
+      v-model:value="searchText"
       placeholder="input search text"
       enter-button="Search"
       size="large"
@@ -30,6 +30,8 @@ import UserList from "@/components/UserList.vue";
 import MyDivider from "@/components/MyDivider.vue";
 import { useRoute, useRouter } from "vue-router";
 import request from "@/plugins/request";
+import { message } from "ant-design-vue";
+import { SEARCH_TYPE_ENUM } from "@/constants/search";
 
 const router = useRouter();
 
@@ -41,18 +43,22 @@ const activeKey = route.params.category;
  * 初始化参数（不可修改）
  */
 const initSearchParams = {
-  searchText: "",
+  type: activeKey,
   current: 1,
   pageSize: 20,
 };
+
+const searchText = ref(route.query.searchText);
 
 /**
  * 搜索参数
  */
 const searchParams = ref({
   ...initSearchParams,
-  searchText: route.query.searchText,
+  searchText: searchText.value,
 });
+
+// 进入页面时会触发一次加载数据参数
 
 const postList = ref([]);
 
@@ -64,29 +70,50 @@ const pictureList = ref([]);
  * 加载数据
  */
 const loadData = () => {
-  request.post("/search/all/fast", searchParams.value).then((res: any) => {
-    postList.value = res.postList;
-    userList.value = res.userList;
-    pictureList.value = res.pictureList ?? [];
+  const type = searchParams.value.type;
+  if (!type) {
+    message.error("类别为空");
+  }
+  request.post("/search/all", searchParams.value).then((res: any) => {
+    if (type === "post") {
+      postList.value = res.dataList ?? [];
+    } else if (type === "user") {
+      userList.value = res.dataList ?? [];
+    } else if (type === "picture") {
+      pictureList.value = res.dataList ?? [];
+    }
+    console.log(res);
   });
 };
 
-onMounted(() => {
+watchEffect(() => {
   loadData();
 });
 
 /**
- * 搜索时触发
+ * 点击搜索按钮时触发
  */
 const onSearch = () => {
   // 修改url后面的参数
   router.push({
-    query: searchParams.value,
+    query: {
+      ...searchParams.value,
+      searchText: searchText.value,
+    },
   });
-  loadData();
+  searchParams.value = {
+    ...searchParams.value,
+    searchText: searchText.value,
+  };
 };
 
+/**
+ * 切换标签栏时触发
+ * @param activeKey
+ */
 const onTabChange = (activeKey: string) => {
+  // 修改 searchParams 的值
+  searchParams.value.type = activeKey;
   // 修改url
   router.push({
     path: `/${activeKey}`,

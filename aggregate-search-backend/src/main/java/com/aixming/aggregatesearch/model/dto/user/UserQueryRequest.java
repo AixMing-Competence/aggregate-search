@@ -1,9 +1,10 @@
 package com.aixming.aggregatesearch.model.dto.user;
 
 import com.aixming.aggregatesearch.common.PageRequest;
-import java.io.Serializable;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import java.io.Serializable;
 
 /**
  * 用户查询请求
@@ -32,6 +33,11 @@ public class UserQueryRequest extends PageRequest implements Serializable {
      * 用户昵称
      */
     private String userName;
+
+    /**
+     * 搜索词
+     */
+    private String searchText;
 
     /**
      * 简介

@@ -1,16 +1,17 @@
 package com.aixming.aggregatesearch.controller;
 
-import cn.hutool.core.bean.BeanUtil;
 import com.aixming.aggregatesearch.common.BaseResponse;
 import com.aixming.aggregatesearch.common.ErrorCode;
 import com.aixming.aggregatesearch.common.ResultUtils;
+import com.aixming.aggregatesearch.datasource.DataSource;
+import com.aixming.aggregatesearch.datasource.PictureDataSource;
+import com.aixming.aggregatesearch.datasource.PostDataSource;
+import com.aixming.aggregatesearch.datasource.UserDataSource;
 import com.aixming.aggregatesearch.exception.BusinessException;
 import com.aixming.aggregatesearch.exception.ThrowUtils;
-import com.aixming.aggregatesearch.model.dto.picture.PictureQueryRequest;
-import com.aixming.aggregatesearch.model.dto.post.PostQueryRequest;
 import com.aixming.aggregatesearch.model.dto.search.SearchRequest;
-import com.aixming.aggregatesearch.model.dto.user.UserQueryRequest;
 import com.aixming.aggregatesearch.model.entity.Picture;
+import com.aixming.aggregatesearch.model.enums.SearchTypeEnum;
 import com.aixming.aggregatesearch.model.vo.PostVO;
 import com.aixming.aggregatesearch.model.vo.SearchVO;
 import com.aixming.aggregatesearch.model.vo.UserVO;
@@ -47,6 +48,12 @@ public class SearchController {
 
     private final PostService postService;
 
+    private final PictureDataSource pictureDataSource;
+
+    private final PostDataSource postDataSource;
+
+    private final UserDataSource userDataSource;
+
     /**
      * 根据 searchText 分页查询多个数据源
      *
@@ -57,67 +64,68 @@ public class SearchController {
     @PostMapping("/all")
     public BaseResponse<SearchVO> searchAll(@RequestBody SearchRequest searchRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(searchRequest == null, ErrorCode.PARAMS_ERROR);
-        SearchVO searchVO = new SearchVO();
-        if (StringUtils.isNotBlank(searchRequest.getSearchText())) {
-            PictureQueryRequest pictureQueryRequest = BeanUtil.copyProperties(searchRequest, PictureQueryRequest.class);
-            Page<Picture> picturePage = pictureService.searchPicture(pictureQueryRequest);
-            searchVO.setPictureList(picturePage.getRecords());
-        }
-        UserQueryRequest userQueryRequest = BeanUtil.copyProperties(searchRequest, UserQueryRequest.class);
-        Page<UserVO> userVOPage = userService.listUserVOByPage(userQueryRequest);
-        PostQueryRequest postQueryRequest = BeanUtil.copyProperties(searchRequest, PostQueryRequest.class);
-        Page<PostVO> postVOPage = postService.listPostVOByPage(postQueryRequest, request);
+        // 要获取的数据类型
+        String type = searchRequest.getType();
+        SearchTypeEnum searchTypeEnum = SearchTypeEnum.getEnumByValue(type);
 
-        searchVO.setUserList(userVOPage.getRecords());
-        searchVO.setPostList(postVOPage.getRecords());
-        return ResultUtils.success(searchVO);
-    }
+        String searchText = searchRequest.getSearchText();
+        int current = searchRequest.getCurrent();
+        int pageSize = searchRequest.getPageSize();
 
-    /**
-     * 根据 searchText 分页查询多个数据源（并发）
-     *
-     * @param searchRequest
-     * @param request
-     * @return
-     */
-    @PostMapping("/all/fast")
-    public BaseResponse<SearchVO> searchAllFast(@RequestBody SearchRequest searchRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(searchRequest == null, ErrorCode.PARAMS_ERROR);
+
         SearchVO searchVO = new SearchVO();
 
-        CompletableFuture<Void> pictureTask = CompletableFuture.runAsync(() -> {
-            if (StringUtils.isNotBlank(searchRequest.getSearchText())) {
-                PictureQueryRequest pictureQueryRequest = BeanUtil.copyProperties(searchRequest, PictureQueryRequest.class);
-                Page<Picture> picturePage = pictureService.searchPicture(pictureQueryRequest);
-                searchVO.setPictureList(picturePage.getRecords());
+        if (searchTypeEnum == null) {
+            // 并发查询全部数据
+            CompletableFuture<Void> pictureTask = CompletableFuture.runAsync(() -> {
+                if (StringUtils.isNotBlank(searchText)) {
+                    Page<Picture> picturePage = pictureDataSource.doSearch(searchText, current, pageSize,request);
+                    searchVO.setPictureList(picturePage.getRecords());
+                }
+            });
+
+            CompletableFuture<Page<UserVO>> userTask = CompletableFuture.supplyAsync(() -> {
+                Page<UserVO> userVOPage = userDataSource.doSearch(searchText, current, pageSize,request);
+                return userVOPage;
+            });
+
+            CompletableFuture<Page<PostVO>> postTask = CompletableFuture.supplyAsync(() -> {
+                Page<PostVO> postVOPage = postDataSource.doSearch(searchText, current, pageSize,request);
+                return postVOPage;
+            });
+
+            // 等待任务完成
+            CompletableFuture.allOf(pictureTask, userTask, postTask).join();
+            Page<UserVO> userVOPage;
+            Page<PostVO> postVOPage;
+            try {
+                userVOPage = userTask.get();
+                postVOPage = postTask.get();
+            } catch (Exception e) {
+                log.error("搜索异常", e);
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "搜索异常");
             }
-        });
-
-        CompletableFuture<Page<UserVO>> userTask = CompletableFuture.supplyAsync(() -> {
-            UserQueryRequest userQueryRequest = BeanUtil.copyProperties(searchRequest, UserQueryRequest.class);
-            Page<UserVO> userVOPage = userService.listUserVOByPage(userQueryRequest);
-            return userVOPage;
-        });
-
-        CompletableFuture<Page<PostVO>> postTask = CompletableFuture.supplyAsync(() -> {
-            PostQueryRequest postQueryRequest = BeanUtil.copyProperties(searchRequest, PostQueryRequest.class);
-            Page<PostVO> postVOPage = postService.listPostVOByPage(postQueryRequest, request);
-            return postVOPage;
-        });
-
-        // 等待任务完成
-        CompletableFuture.allOf(pictureTask, userTask, postTask).join();
-        Page<UserVO> userVOPage;
-        Page<PostVO> postVOPage;
-        try {
-            userVOPage = userTask.get();
-            postVOPage = postTask.get();
-        } catch (Exception e) {
-            log.error("搜索异常", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "搜索异常");
+            searchVO.setUserList(userVOPage.getRecords());
+            searchVO.setPostList(postVOPage.getRecords());
+        } else {
+            // 查询特殊类别的数据
+            DataSource dataSource = null;
+            switch (searchTypeEnum) {
+                case POST -> {
+                    dataSource = postDataSource;
+                }
+                case USER -> {
+                    dataSource = userDataSource;
+                }
+                case PICTURE -> {
+                    dataSource = pictureDataSource;
+                }
+                default -> {
+                }
+            }
+            Page<?> page = dataSource.doSearch(searchText, current, pageSize,request);
+            searchVO.setDataList(page.getRecords());
         }
-        searchVO.setUserList(userVOPage.getRecords());
-        searchVO.setPostList(postVOPage.getRecords());
         return ResultUtils.success(searchVO);
     }
 

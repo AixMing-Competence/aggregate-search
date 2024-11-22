@@ -20,7 +20,6 @@ import com.aixming.aggregatesearch.service.PostService;
 import com.aixming.aggregatesearch.service.UserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -39,9 +38,9 @@ import java.util.List;
 @Slf4j
 public class PostController {
 
-    private final @NotNull PostService postService;
+    private final PostService postService;
 
-    private final @NotNull UserService userService;
+    private final UserService userService;
 
     // region 增删改查
 
