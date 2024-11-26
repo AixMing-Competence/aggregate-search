@@ -3,10 +3,7 @@ package com.aixming.aggregatesearch.controller;
 import com.aixming.aggregatesearch.common.BaseResponse;
 import com.aixming.aggregatesearch.common.ErrorCode;
 import com.aixming.aggregatesearch.common.ResultUtils;
-import com.aixming.aggregatesearch.datasource.DataSource;
-import com.aixming.aggregatesearch.datasource.PictureDataSource;
-import com.aixming.aggregatesearch.datasource.PostDataSource;
-import com.aixming.aggregatesearch.datasource.UserDataSource;
+import com.aixming.aggregatesearch.datasource.*;
 import com.aixming.aggregatesearch.exception.BusinessException;
 import com.aixming.aggregatesearch.exception.ThrowUtils;
 import com.aixming.aggregatesearch.model.dto.search.SearchRequest;
@@ -15,9 +12,6 @@ import com.aixming.aggregatesearch.model.enums.SearchTypeEnum;
 import com.aixming.aggregatesearch.model.vo.PostVO;
 import com.aixming.aggregatesearch.model.vo.SearchVO;
 import com.aixming.aggregatesearch.model.vo.UserVO;
-import com.aixming.aggregatesearch.service.PictureService;
-import com.aixming.aggregatesearch.service.PostService;
-import com.aixming.aggregatesearch.service.UserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -43,17 +36,13 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class SearchController {
 
-    private final PictureService pictureService;
-
-    private final UserService userService;
-
-    private final PostService postService;
-
     private final PictureDataSource pictureDataSource;
 
     private final PostDataSource postDataSource;
 
     private final UserDataSource userDataSource;
+
+    private final DataSourceRegistry dataSourceRegistry;
 
     /**
      * 根据 searchText 分页查询多个数据源
@@ -110,12 +99,7 @@ public class SearchController {
             searchVO.setPostList(postVOPage.getRecords());
         } else {
             // 查询特殊类别的数据
-            Map<String, DataSource<?>> searchTypeEnumMap = Map.of(
-                    SearchTypeEnum.USER.getValue(), userDataSource,
-                    SearchTypeEnum.POST.getValue(), postDataSource,
-                    SearchTypeEnum.PICTURE.getValue(), pictureDataSource
-            );
-            DataSource<?> dataSource = searchTypeEnumMap.get(searchTypeEnum.getValue());
+            DataSource<?> dataSource = dataSourceRegistry.getDataSourceByType(searchTypeEnum.getValue());
             Page<?> page = dataSource.doSearch(searchText, current, pageSize, request);
             searchVO.setDataList(page.getRecords());
         }
