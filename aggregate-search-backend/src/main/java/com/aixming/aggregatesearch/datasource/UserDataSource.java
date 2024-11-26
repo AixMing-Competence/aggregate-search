@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@SearchConfig(type = "user")
 public class UserDataSource implements DataSource<UserVO> {
 
     private final UserService userService;

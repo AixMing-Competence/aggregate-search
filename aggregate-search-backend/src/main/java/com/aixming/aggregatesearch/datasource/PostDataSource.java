@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@SearchConfig(type = "post")
 public class PostDataSource implements DataSource<PostVO> {
 
     private final PostService postService;

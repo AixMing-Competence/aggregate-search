@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@SearchConfig(type = "picture")
 public class PictureDataSource implements DataSource<Picture> {
 
     private final PictureService pictureService;

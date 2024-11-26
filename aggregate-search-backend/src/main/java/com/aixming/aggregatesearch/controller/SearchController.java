@@ -44,6 +44,8 @@ public class SearchController {
 
     private final DataSourceRegistry dataSourceRegistry;
 
+    private final SearchStrategyExecutor searchStrategyExecutor;
+
     /**
      * 根据 searchText 分页查询多个数据源
      *
@@ -101,6 +103,68 @@ public class SearchController {
             // 查询特殊类别的数据
             DataSource<?> dataSource = dataSourceRegistry.getDataSourceByType(searchTypeEnum.getValue());
             Page<?> page = dataSource.doSearch(searchText, current, pageSize, request);
+            searchVO.setDataList(page.getRecords());
+        }
+        return ResultUtils.success(searchVO);
+    }
+
+    /**
+     * 根据 searchText 分页查询多个数据源（策略模式）
+     *
+     * @param searchRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/all/strategy")
+    public BaseResponse<SearchVO> searchAllByStrategy(@RequestBody SearchRequest searchRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(searchRequest == null, ErrorCode.PARAMS_ERROR);
+        // 要获取的数据类型
+        String type = searchRequest.getType();
+        SearchTypeEnum searchTypeEnum = SearchTypeEnum.getEnumByValue(type);
+
+        String searchText = searchRequest.getSearchText();
+        int current = searchRequest.getCurrent();
+        int pageSize = searchRequest.getPageSize();
+
+
+        SearchVO searchVO = new SearchVO();
+
+        if (searchTypeEnum == null) {
+            // 并发查询全部数据
+            CompletableFuture<Void> pictureTask = CompletableFuture.runAsync(() -> {
+                if (StringUtils.isNotBlank(searchText)) {
+                    Page<Picture> picturePage = pictureDataSource.doSearch(searchText, current, pageSize, request);
+                    searchVO.setPictureList(picturePage.getRecords());
+                }
+            });
+
+            CompletableFuture<Page<UserVO>> userTask = CompletableFuture.supplyAsync(() -> {
+                Page<UserVO> userVOPage = userDataSource.doSearch(searchText, current, pageSize, request);
+                return userVOPage;
+            });
+
+            CompletableFuture<Page<PostVO>> postTask = CompletableFuture.supplyAsync(() -> {
+                Page<PostVO> postVOPage = postDataSource.doSearch(searchText, current, pageSize, request);
+                return postVOPage;
+            });
+
+            // 等待任务完成
+            CompletableFuture.allOf(pictureTask, userTask, postTask).join();
+            Page<UserVO> userVOPage;
+            Page<PostVO> postVOPage;
+            try {
+                userVOPage = userTask.get();
+                postVOPage = postTask.get();
+            } catch (Exception e) {
+                log.error("搜索异常", e);
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "搜索异常");
+            }
+            searchVO.setUserList(userVOPage.getRecords());
+            searchVO.setPostList(postVOPage.getRecords());
+        } else {
+            // 查询特殊类别的数据
+            DataSource<?> dataSource = dataSourceRegistry.getDataSourceByType(searchTypeEnum.getValue());
+            Page<?> page = searchStrategyExecutor.doExecutor(searchText, current, pageSize, request, type);
             searchVO.setDataList(page.getRecords());
         }
         return ResultUtils.success(searchVO);
