@@ -1,6 +1,7 @@
 package com.aixming.aggregatesearch.datasource;
 
 import com.aixming.aggregatesearch.model.dto.post.PostQueryRequest;
+import com.aixming.aggregatesearch.model.entity.Post;
 import com.aixming.aggregatesearch.model.vo.PostVO;
 import com.aixming.aggregatesearch.service.PostService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -26,7 +27,8 @@ public class PostDataSource implements DataSource<PostVO> {
         postQueryRequest.setSearchText(searchText);
         postQueryRequest.setCurrent(current);
         postQueryRequest.setPageSize(pageSize);
-        return postService.listPostVOByPage(postQueryRequest, request);
+        Page<Post> postPage = postService.searchFromEs(postQueryRequest);
+        return postService.getPostVOPage(postPage, request);
     }
 
 }

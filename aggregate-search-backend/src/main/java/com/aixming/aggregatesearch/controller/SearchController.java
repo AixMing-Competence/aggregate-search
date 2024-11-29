@@ -63,8 +63,7 @@ public class SearchController {
         String searchText = searchRequest.getSearchText();
         int current = searchRequest.getCurrent();
         int pageSize = searchRequest.getPageSize();
-
-
+        
         SearchVO searchVO = new SearchVO();
 
         if (searchTypeEnum == null) {
@@ -75,17 +74,14 @@ public class SearchController {
                     searchVO.setPictureList(picturePage.getRecords());
                 }
             });
-
             CompletableFuture<Page<UserVO>> userTask = CompletableFuture.supplyAsync(() -> {
                 Page<UserVO> userVOPage = userDataSource.doSearch(searchText, current, pageSize, request);
                 return userVOPage;
             });
-
             CompletableFuture<Page<PostVO>> postTask = CompletableFuture.supplyAsync(() -> {
                 Page<PostVO> postVOPage = postDataSource.doSearch(searchText, current, pageSize, request);
                 return postVOPage;
             });
-
             // 等待任务完成
             CompletableFuture.allOf(pictureTask, userTask, postTask).join();
             Page<UserVO> userVOPage;
@@ -163,7 +159,6 @@ public class SearchController {
             searchVO.setPostList(postVOPage.getRecords());
         } else {
             // 查询特殊类别的数据
-            DataSource<?> dataSource = dataSourceRegistry.getDataSourceByType(searchTypeEnum.getValue());
             Page<?> page = searchStrategyExecutor.doExecutor(searchText, current, pageSize, request, type);
             searchVO.setDataList(page.getRecords());
         }

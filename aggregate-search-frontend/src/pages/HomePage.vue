@@ -58,8 +58,6 @@ const searchParams = ref({
   searchText: searchText.value,
 });
 
-// 进入页面时会触发一次加载数据参数
-
 const postList = ref([]);
 
 const userList = ref([]);
@@ -86,6 +84,7 @@ const loadData = () => {
   });
 };
 
+// 进入页面时会触发一次加载数据参数
 watchEffect(() => {
   loadData();
 });

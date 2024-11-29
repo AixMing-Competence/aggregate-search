@@ -1,6 +1,13 @@
 package com.aixming.aggregatesearch.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import co.elastic.clients.elasticsearch._types.SortOptions;
+import co.elastic.clients.elasticsearch._types.SortOptionsBuilders;
+import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.MatchQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.QueryBuilders;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
 import com.aixming.aggregatesearch.common.ErrorCode;
 import com.aixming.aggregatesearch.constant.CommonConstant;
 import com.aixming.aggregatesearch.exception.BusinessException;
@@ -8,6 +15,7 @@ import com.aixming.aggregatesearch.exception.ThrowUtils;
 import com.aixming.aggregatesearch.mapper.PostFavourMapper;
 import com.aixming.aggregatesearch.mapper.PostMapper;
 import com.aixming.aggregatesearch.mapper.PostThumbMapper;
+import com.aixming.aggregatesearch.model.dto.post.PostEsDTO;
 import com.aixming.aggregatesearch.model.dto.post.PostQueryRequest;
 import com.aixming.aggregatesearch.model.entity.Post;
 import com.aixming.aggregatesearch.model.entity.PostFavour;
@@ -24,14 +32,18 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.elasticsearch.client.elc.ElasticsearchTemplate;
+import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.core.SearchHit;
+import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +63,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     @Resource
     private PostFavourMapper postFavourMapper;
+
+    @Resource
+    private ElasticsearchTemplate elasticsearchTemplate;
 
     @Override
     public void validPost(Post post, boolean add) {
@@ -204,8 +219,117 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         return postVOPage;
     }
 
+    @Override
+    public Page<Post> searchFromEs(PostQueryRequest postQueryRequest) {
+        Long id = postQueryRequest.getId();
+        Long notId = postQueryRequest.getNotId();
+        String searchText = postQueryRequest.getSearchText();
+        String title = postQueryRequest.getTitle();
+        String content = postQueryRequest.getContent();
+        List<String> tags = postQueryRequest.getTags();
+        List<String> orTags = postQueryRequest.getOrTags();
+        Long userId = postQueryRequest.getUserId();
+        int current = postQueryRequest.getCurrent() - 1;
+        int pageSize = postQueryRequest.getPageSize();
+        String sortField = postQueryRequest.getSortField();
+        String sortOrder = postQueryRequest.getSortOrder();
+
+        // 过滤
+        BoolQuery.Builder boolQueryBuilder = QueryBuilders.bool();
+        boolQueryBuilder.filter(TermQuery.of(m -> m.field("isDelete")
+                .value(0))._toQuery());
+        if (id != null) {
+            boolQueryBuilder.filter(TermQuery.of(m -> m.field("id")
+                    .value(id))._toQuery());
+        }
+        if (notId != null) {
+            boolQueryBuilder.mustNot(TermQuery.of(m -> m.field("id")
+                    .value(notId))._toQuery());
+        }
+        if (userId != null) {
+            boolQueryBuilder.filter(TermQuery.of(m -> m.field("userId")
+                    .value(userId))._toQuery());
+        }
+        // 必须包含所有标签
+        if (CollectionUtils.isNotEmpty(tags)) {
+            for (String tag : tags) {
+                boolQueryBuilder.filter(TermQuery.of(m -> m.field("tags")
+                        .value(tag))._toQuery());
+            }
+        }
+        // 包含任何一个标签即可
+        if (CollectionUtils.isNotEmpty(orTags)) {
+            for (String orTag : orTags) {
+                boolQueryBuilder.should(TermQuery.of(m -> m.field("tags").value(orTag))._toQuery());
+            }
+            // 最少需要满足一个
+            boolQueryBuilder.minimumShouldMatch("1");
+        }
+        // 按关键词搜索
+        if (StringUtils.isNotBlank(searchText)) {
+            // 满足 title、content 即可
+            boolQueryBuilder.should(MatchQuery.of(m -> m.field("title").query(searchText))._toQuery());
+            boolQueryBuilder.should(MatchQuery.of(m -> m.field("content").query(searchText))._toQuery());
+            boolQueryBuilder.minimumShouldMatch("1");
+        }
+        // 按标题搜索
+        if (StringUtils.isNotBlank(title)) {
+            boolQueryBuilder.must(MatchQuery.of(m -> m.field("title").query(title))._toQuery());
+        }
+        // 按内容搜索
+        if (StringUtils.isNotBlank(content)) {
+            boolQueryBuilder.must(MatchQuery.of(m -> m.field("content").query(content))._toQuery());
+        }
+        // 排序
+        SortOptions sortOptions = null;
+        if (StringUtils.isNotBlank(sortField)) {
+            sortOptions = SortOptionsBuilders.field(f ->
+                    f.field(sortField).order(
+                            CommonConstant.SORT_ORDER_ASC.equals(sortOrder) ? SortOrder.Asc : SortOrder.Desc
+                    )
+            );
+        }
+        // 分页
+        PageRequest pageRequest = PageRequest.of(current, pageSize);
+        // 构造查询
+        NativeQuery query;
+        if (sortOptions == null) {
+            query = NativeQuery.builder()
+                    .withQuery(boolQueryBuilder.build()._toQuery())
+                    .withPageable(pageRequest)
+                    .withSort(Sort.by("createTime").descending())
+                    .build();
+        } else {
+            query = NativeQuery.builder()
+                    .withQuery(boolQueryBuilder.build()._toQuery())
+                    .withPageable(pageRequest)
+                    .withSort(sortOptions)
+                    .build();
+        }
+        ArrayList<Post> resourceList = new ArrayList<>();
+        // 查出结果后，从 db 获取最新动态数据
+        SearchHits<PostEsDTO> searchHits = elasticsearchTemplate.search(query, PostEsDTO.class);
+        if (searchHits.hasSearchHits()) {
+            List<SearchHit<PostEsDTO>> searchHitsList = searchHits.getSearchHits();
+            // 收集 id 列表
+            List<Long> idList = searchHitsList.stream().map(searchHit -> searchHit.getContent().getId()).toList();
+            // 从数据库中查询数据
+            List<Post> postList = listByIds(idList);
+            if (CollectionUtils.isNotEmpty(postList)) {
+                Map<Long, List<Post>> idPostMap = postList.stream().collect(Collectors.groupingBy(Post::getId));
+                idList.forEach(dbId -> {
+                    if (idPostMap.containsKey(dbId)) {
+                        resourceList.add(idPostMap.get(dbId).get(0));
+                    } else {
+                        // 从 es 中删除数据库中已经被删除的记录
+                        elasticsearchTemplate.delete(String.valueOf(dbId), PostEsDTO.class);
+                    }
+                });
+            }
+        }
+        Page<Post> postPage = new Page<>();
+        postPage.setTotal(resourceList.size());
+        postPage.setRecords(resourceList);
+        return postPage;
+    }
 }
-
-
-
-
