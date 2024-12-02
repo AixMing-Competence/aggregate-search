@@ -47,6 +47,12 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-data-redis</artifactId>
         </dependency>
+        <!-- https://github.com/alibaba/canal -->
+        <dependency>
+            <groupId>com.alibaba.otter</groupId>
+            <artifactId>canal.client</artifactId>
+            <version>1.1.0</version>
+        </dependency>
         <!-- jsoup HTML parser library @ https://jsoup.org/ -->
         <dependency>
             <groupId>org.jsoup</groupId>
